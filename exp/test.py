@@ -34,7 +34,7 @@ parser.add_argument("--feature", type=str, default="DIR", help="Feature type, op
 parser.add_argument("--seq_len", type=int, default=5000, help="Input sequence length")
 
 # Optimization parameters
-parser.add_argument("--num_workers", type=int, default=10, help="Data loader num workers")
+parser.add_argument("--num_workers", type=int, default=0, help="Data loader num workers")
 parser.add_argument("--batch_size", type=int, default=256, help="Batch size of train input data")
 
 # Output parameters
