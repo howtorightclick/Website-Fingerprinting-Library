@@ -98,6 +98,59 @@ python exp/dataset_process/dataset_split.py --dataset CW
 python exp/dataset_process/dataset_split.py --dataset Closed_2tab --use_stratify False
 ```
 
+### Extracting verified QUIC captures
+
+`pcap_pipeline.py` accepts the same part directories as the QUIC classifier pipeline:
+
+```text
+<part>/data/verified/<defense>/<domain>/<session>/
+    receipt.json                 # optional
+    pcaps/traffic.pcap           # or traffic.pcapng
+```
+
+Install Wireshark with TShark (4.2+ recommended) and the Python dependencies in
+`requirements.txt`. Run from the repository root:
+
+```sh
+python pcap_pipeline.py /path/to/part1 /path/to/part2 --out-dir datasets --seq-len 10000
+# Optionally also extract all aggregated model features:
+python pcap_pipeline.py /path/to/part1 --out-dir datasets --features TAM TAF MTAF
+```
+
+The pipeline writes one sample per session capture and one dataset per defense,
+for example `datasets/Front.npz` and `datasets/Front.labels.json`. Raw `X` has shape
+`(N, seq_len)` with signed relative timestamps in seconds: outgoing is positive,
+incoming is negative, and padding is zero. Packets at relative time zero use
+`1e-9` seconds so WFlib does not mistake them for padding. Each UDP datagram counts
+once, even when it contains multiple QUIC packets; packet lengths and decrypted
+QUIC frame contents are not model features in this library.
+
+Raw datasets work with `load_data` features `DIR`, `DT`, and `DT2`. Optional files
+`Front_tam.npz`, `Front_taf.npz`, and `Front_mtaf.npz` contain the existing WFlib
+representations with shapes `(N, 2, 1800)`, `(N, 3, 2, 2000)`, and `(N, 8, 8000)`.
+They use the same retained packet window as the raw dataset. Choose `--seq-len`
+to match your experiment (existing feature-generation scripts default to 5000).
+These are single-domain labels; multi-tab ground truth cannot be inferred from
+this folder structure.
+
+Receipts validate folder labels and select the exact UDP five-tuple. Without a
+receipt, client direction is inferred from a QUIC ClientHello; use
+`--client-address IP` when it is unavailable. Only canonical traffic captures
+are included. Direct PCAP inputs require `--domain DOMAIN`. Other options include
+`--tshark PATH`, repeatable `--port PORT` to force QUIC decoding, and
+`--skip-invalid` to report and omit invalid captures. Duplicate capture contents
+are rejected. Invalid receipts always fail discovery.
+
+Archives also store `groups` and `captures` as string arrays, readable without
+pickle. Receipt groups match study/domain/slot across defenses; without receipts,
+groups match domain/session names. Keep each group entirely within one training,
+validation, or test partition, including comparisons across defenses. The existing
+`dataset_split.py` uses sample-level splitting and does not preserve these groups.
+Labels are contiguous within each defense; consult its label map when comparing
+datasets. Outputs are complete datasets, not pre-split training files. Split the
+raw data by group before using the existing `gen_tam.py`, `gen_taf.py`, or
+`gen_mtaf.py` scripts to generate the training file names used by model scripts.
+
 ### Training \& Evaluation
 
 We provide all experiment scripts for WF attacks in the folder `./scripts/`. For example, you can reproduce the DF attack on the CW dataset by executing the following command.
